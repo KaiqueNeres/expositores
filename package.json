@@ -1,0 +1,22 @@
+{
+  "name": "expositores-sial-paris",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Coleta dados publicos dos expositores do SIAL Paris 2026 via API Algolia do site oficial.",
+  "main": "src/collectExhibitors.js",
+  "type": "commonjs",
+  "scripts": {
+    "collect": "node src/collectExhibitors.js",
+    "serve": "node server.js",
+    "dev": "nodemon --watch server.js --watch public --ext js,html,css server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "qs": "^6.15.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

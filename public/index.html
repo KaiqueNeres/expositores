@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Expositores SIAL Paris 2026</title>
+<link rel="stylesheet" href="/public/styles.css" />
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Expositores — SIAL Paris 2026</h1>
+    <div class="subtitle">Dados públicos coletados via API oficial do site (sialparis.com)</div>
+  </div>
+  <div class="stats">
+    <div class="stat-box"><div class="value" id="stat-total">–</div><div class="label">Total</div></div>
+    <div class="stat-box"><div class="value" id="stat-filtered">–</div><div class="label">Filtrados</div></div>
+    <div class="stat-box"><div class="value" id="stat-paises">–</div><div class="label">Países</div></div>
+    <div class="stat-box"><div class="value" id="stat-com-produtos">–</div><div class="label">Com produtos</div></div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <input type="text" id="search" placeholder="Buscar por nome, cidade, stand..." />
+  <select id="country-filter">
+    <option value="">Todos os países</option>
+  </select>
+  <select id="activity-filter">
+    <option value="">Todos</option>
+    <option value="food" selected>Alimentos e Produtos</option>
+  </select>
+  <button class="button" id="download-json" type="button" title="Exporta apenas os resultados filtrados na tela">Baixar JSON</button>
+  <button class="button" id="download-csv" type="button" title="Exporta apenas os resultados filtrados na tela">Baixar CSV (Excel)</button>
+</div>
+
+<main>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>Stand</th>
+          <th>Endereço</th>
+          <th>Cidade</th>
+          <th>País</th>
+          <th>Activity Field</th>
+          <th>Site</th>
+          <th>Redes sociais</th>
+          <th>Produtos</th>
+        </tr>
+      </thead>
+      <tbody id="table-body">
+        <tr><td colspan="9" class="loading">Carregando dados...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="pagination" id="pagination"></div>
+</main>
+
+<script src="/public/app.js"></script>
+</body>
+</html>
