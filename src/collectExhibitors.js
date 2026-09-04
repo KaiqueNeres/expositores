@@ -8,7 +8,8 @@ const { mapExhibitor } = require('./mapExhibitor');
 const { mapProduct } = require('./mapProduct');
 const { parseFilterUrl } = require('./parseFilterUrl');
 
-async function collectExhibitors(filterUrl) {
+async function collectExhibitors(filterUrl, options = {}) {
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
   const extraParams = { facetFilters: [], query: '' };
 
   if (filterUrl) {
@@ -28,16 +29,21 @@ async function collectExhibitors(filterUrl) {
   const byId = new Map();
   let loggedSampleExhibitor = false;
 
-  const exhibitorsResult = await collectAllFromIndex(INDEX_EXHIBITORS, extraParams, (rawHit) => {
-    if (!loggedSampleExhibitor) {
-      console.log('\n--- Exemplo de registro BRUTO recebido da API (expositor) ---');
-      console.log(JSON.stringify(rawHit, null, 2));
-      console.log('--- fim do exemplo ---\n');
-      loggedSampleExhibitor = true;
-    }
-    const mapped = mapExhibitor(rawHit);
-    if (mapped.id) byId.set(mapped.id, mapped);
-  });
+  const exhibitorsResult = await collectAllFromIndex(
+    INDEX_EXHIBITORS,
+    extraParams,
+    (rawHit) => {
+      if (!loggedSampleExhibitor) {
+        console.log('\n--- Exemplo de registro BRUTO recebido da API (expositor) ---');
+        console.log(JSON.stringify(rawHit, null, 2));
+        console.log('--- fim do exemplo ---\n');
+        loggedSampleExhibitor = true;
+      }
+      const mapped = mapExhibitor(rawHit);
+      if (mapped.id) byId.set(mapped.id, mapped);
+    },
+    (p) => onProgress({ phase: 'expositores', collected: p.fetched, total: p.total })
+  );
 
   console.log(`\nExpositores coletados: ${byId.size} / ${exhibitorsResult.totalExpected}`);
   for (const w of exhibitorsResult.warnings) console.log(`  Aviso: ${w}`);
@@ -48,22 +54,27 @@ async function collectExhibitors(filterUrl) {
   let productsLinked = 0;
   let productsOrphan = 0;
 
-  const productsResult = await collectAllFromIndex(INDEX_PRODUCTS, extraParams, (rawHit) => {
-    if (!loggedSampleProduct) {
-      console.log('\n--- Exemplo de registro BRUTO recebido da API (produto) ---');
-      console.log(JSON.stringify(rawHit, null, 2));
-      console.log('--- fim do exemplo ---\n');
-      loggedSampleProduct = true;
-    }
-    const product = mapProduct(rawHit);
-    const exhibitor = product.exhibitorId ? byId.get(product.exhibitorId) : null;
-    if (exhibitor) {
-      exhibitor.products.push(product);
-      productsLinked += 1;
-    } else {
-      productsOrphan += 1;
-    }
-  });
+  const productsResult = await collectAllFromIndex(
+    INDEX_PRODUCTS,
+    extraParams,
+    (rawHit) => {
+      if (!loggedSampleProduct) {
+        console.log('\n--- Exemplo de registro BRUTO recebido da API (produto) ---');
+        console.log(JSON.stringify(rawHit, null, 2));
+        console.log('--- fim do exemplo ---\n');
+        loggedSampleProduct = true;
+      }
+      const product = mapProduct(rawHit);
+      const exhibitor = product.exhibitorId ? byId.get(product.exhibitorId) : null;
+      if (exhibitor) {
+        exhibitor.products.push(product);
+        productsLinked += 1;
+      } else {
+        productsOrphan += 1;
+      }
+    },
+    (p) => onProgress({ phase: 'produtos', collected: p.fetched, total: p.total })
+  );
 
   console.log(`\nProdutos coletados: ${productsResult.totalFetched} / ${productsResult.totalExpected}`);
   console.log(`  Vinculados a algum expositor coletado: ${productsLinked}`);
@@ -136,11 +147,20 @@ function formatRestOfAddress(ex) {
   return [ex.address_1, ex.address_2, ex.address_3, ex.city, ex.zipcode, ex.state].filter(Boolean).join(', ');
 }
 
+// Grava em um arquivo temporário e só então renomeia (rename é atômico no mesmo
+// filesystem). Assim, quem estiver lendo data/exhibitors.json pelo navegador nunca
+// vê um arquivo pela metade enquanto uma atualização está em andamento.
+function writeFileAtomic(finalPath, content) {
+  const tmpPath = `${finalPath}.tmp`;
+  fs.writeFileSync(tmpPath, content, 'utf8');
+  fs.renameSync(tmpPath, finalPath);
+}
+
 function writeOutputs(exhibitors, outDir) {
   fs.mkdirSync(outDir, { recursive: true });
 
   const jsonPath = path.join(outDir, 'exhibitors.json');
-  fs.writeFileSync(jsonPath, JSON.stringify(exhibitors, null, 2), 'utf8');
+  writeFileAtomic(jsonPath, JSON.stringify(exhibitors, null, 2));
 
   const columns = [
     { key: 'name', header: 'Nome' },
@@ -167,7 +187,7 @@ function writeOutputs(exhibitors, outDir) {
     csvLines.push(columns.map((c) => toCsvValue(row[c.key])).join(CSV_DELIMITER));
   }
   const csvPath = path.join(outDir, 'exhibitors.csv');
-  fs.writeFileSync(csvPath, '\uFEFF' + csvLines.join('\n'), 'utf8');
+  writeFileAtomic(csvPath, '\uFEFF' + csvLines.join('\n'));
 
   return { jsonPath, csvPath };
 }

@@ -40,11 +40,15 @@ function rangeFilter(lo, hi) {
  * @param {string} [extraParams.query] Texto de busca livre
  * @param {string[][]} [extraParams.facetFilters] Filtros no formato facetFilters da Algolia
  * @param {(hit: object) => void} onHit Chamado para cada hit bruto encontrado
+ * @param {(progress: { total: number, fetched: number }) => void} [onProgress] Chamado sempre que
+ *   o total esperado é descoberto e a cada lote coletado, para acompanhamento em tempo real.
  * @returns {Promise<{ totalExpected: number, totalFetched: number, leaves: number, warnings: string[] }>}
  */
-async function collectAllFromIndex(indexName, extraParams, onHit) {
+async function collectAllFromIndex(indexName, extraParams, onHit, onProgress) {
   const params = extraParams || { facetFilters: [], query: '' };
   const stats = { leaves: 0, totalFetched: 0, warnings: [] };
+  const notifyProgress = typeof onProgress === 'function' ? onProgress : () => {};
+  let runningFetched = 0;
 
   const baseBody = {
     query: params.query || '',
@@ -53,6 +57,7 @@ async function collectAllFromIndex(indexName, extraParams, onHit) {
 
   const totalInfo = await algoliaQuery(indexName, { ...baseBody, hitsPerPage: 0 });
   const totalExpected = totalInfo.nbHits;
+  notifyProgress({ total: totalExpected, fetched: 0 });
 
   const now = Math.floor(Date.now() / 1000);
   const upperBound = now + 86400; // +1 dia de margem de segurança
@@ -76,6 +81,8 @@ async function collectAllFromIndex(indexName, extraParams, onHit) {
       const hits = data.hits || [];
       for (const hit of hits) onHit(hit);
       fetched += hits.length;
+      runningFetched += hits.length;
+      notifyProgress({ total: totalExpected, fetched: runningFetched });
       await sleep(DELAY_BETWEEN_REQUESTS_MS);
       if (hits.length < PAGE_SIZE) break;
       offset += PAGE_SIZE;

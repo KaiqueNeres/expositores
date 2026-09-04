@@ -1,30 +1,72 @@
 :root {
   --bg: #0f172a;
   --panel: #1e293b;
+  --panel-alt: #16213a;
   --border: #334155;
   --text: #e2e8f0;
   --muted: #94a3b8;
   --accent: #facc15;
   --accent-dark: #ca8a04;
+  --accent-contrast: #1e293b;
+  --link: #38bdf8;
+  --danger: #f87171;
+  --success: #4ade80;
 }
 
-* { box-sizing: border-box; }
+[data-theme='light'] {
+  --bg: #f4f6fb;
+  --panel: #ffffff;
+  --panel-alt: #eef1f8;
+  --border: #dbe1ec;
+  --text: #1e293b;
+  --muted: #64748b;
+  --accent: #eab308;
+  --accent-dark: #a16207;
+  --accent-contrast: #1e293b;
+  --link: #0284c7;
+  --danger: #dc2626;
+  --success: #16a34a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Regras como `.button { display: inline-flex }` sobrescrevem o `[hidden]`
+   padrão do navegador; sem isto, esconder um botão pelo JS não tem efeito. */
+[hidden] {
+  display: none !important;
+}
 
 body {
   margin: 0;
   font-family: 'Segoe UI', Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+header,
+.data-bar,
+.toolbar,
+.stat-box,
+.table-wrapper,
+thead th,
+.social-chip,
+.pagination button {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+/* ---- Header ------------------------------------------------------------ */
+
 header {
-  padding: 20px 28px;
+  padding: 18px 28px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px;
 }
 
 header h1 {
@@ -38,9 +80,16 @@ header .subtitle {
   margin-top: 4px;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
 .stats {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
@@ -50,7 +99,7 @@ header .subtitle {
   border-radius: 8px;
   padding: 8px 14px;
   text-align: center;
-  min-width: 90px;
+  min-width: 84px;
 }
 
 .stat-box .value {
@@ -65,33 +114,86 @@ header .subtitle {
   text-transform: uppercase;
 }
 
-.toolbar {
-  padding: 16px 28px;
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  align-items: center;
-  border-bottom: 1px solid var(--border);
-}
-
-.toolbar input[type="text"],
-.toolbar select {
+.icon-button {
   background: var(--panel);
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 14px;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.toolbar input[type="text"] {
-  flex: 1;
-  min-width: 220px;
+.icon-button:hover {
+  border-color: var(--accent);
 }
 
-.toolbar .button {
+/* ---- Barra de status/atualização --------------------------------------- */
+
+.data-bar {
+  margin: 16px 28px 0;
+  padding: 10px 16px;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.data-bar-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--success);
+  flex: none;
+}
+
+.status-dot.is-refreshing {
   background: var(--accent);
-  color: #1e293b;
+  animation: pulse 1.1s ease-in-out infinite;
+}
+
+.status-dot.is-error {
+  background: var(--danger);
+}
+
+.refresh-status {
+  color: var(--accent);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---- Botões -------------------------------------------------------------- */
+
+.button {
+  background: var(--accent);
+  color: var(--accent-contrast);
   padding: 8px 14px;
   border-radius: 6px;
   text-decoration: none;
@@ -100,9 +202,83 @@ header .subtitle {
   border: none;
   cursor: pointer;
   font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.toolbar .button:hover { background: var(--accent-dark); }
+.button:hover:not(:disabled) {
+  background: var(--accent-dark);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.button-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.button-outline:hover:not(:disabled) {
+  background: transparent;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.refresh-icon {
+  display: inline-block;
+}
+
+#refresh-btn.is-loading .refresh-icon {
+  animation: spin 0.9s linear infinite;
+}
+
+/* ---- Barra de busca/filtros ---------------------------------------------- */
+
+.toolbar {
+  margin: 16px 28px 0;
+  padding: 14px 16px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.toolbar input[type='text'],
+.toolbar select {
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.toolbar input[type='text'] {
+  flex: 1;
+  min-width: 220px;
+}
+
+.toolbar-selects {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ---- Tabela --------------------------------------------------------------- */
 
 main {
   padding: 0 28px 28px;
@@ -110,9 +286,11 @@ main {
 
 .table-wrapper {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   margin-top: 16px;
+  background: var(--panel);
 }
 
 table {
@@ -133,12 +311,12 @@ thead th {
 
 tbody td {
   padding: 8px 12px;
-  border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+  border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
 
 tbody tr:hover {
-  background: rgba(250, 204, 21, 0.06);
+  background: rgba(250, 204, 21, 0.08);
 }
 
 .empty-value {
@@ -147,12 +325,12 @@ tbody tr:hover {
 }
 
 a.site-link {
-  color: #38bdf8;
+  color: var(--link);
 }
 
 .social-chip {
   display: inline-block;
-  background: var(--panel);
+  background: var(--panel-alt);
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 4px;
@@ -191,7 +369,7 @@ details summary:hover {
 }
 
 .product-list a {
-  color: #38bdf8;
+  color: var(--link);
 }
 
 .pagination {
@@ -199,6 +377,7 @@ details summary:hover {
   align-items: center;
   gap: 10px;
   justify-content: center;
+  flex-wrap: wrap;
   padding: 16px 0 4px;
   color: var(--muted);
   font-size: 13px;
@@ -218,8 +397,92 @@ details summary:hover {
   cursor: not-allowed;
 }
 
-.loading, .no-data {
+.loading,
+.no-data {
   padding: 40px;
   text-align: center;
   color: var(--muted);
+}
+
+/* ---- Responsivo ------------------------------------------------------------ */
+
+@media (max-width: 900px) {
+  header {
+    padding: 16px 18px;
+  }
+  .data-bar,
+  .toolbar {
+    margin: 14px 18px 0;
+  }
+  main {
+    padding: 0 18px 24px;
+  }
+}
+
+@media (max-width: 640px) {
+  header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-right {
+    justify-content: space-between;
+  }
+
+  .stats {
+    flex: 1;
+  }
+
+  .stat-box {
+    flex: 1 1 70px;
+    min-width: 0;
+    padding: 8px 6px;
+  }
+
+  .data-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .data-bar-info {
+    justify-content: center;
+    text-align: center;
+  }
+
+  #refresh-btn {
+    justify-content: center;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar-selects {
+    flex-direction: column;
+  }
+
+  .toolbar input[type='text'],
+  .toolbar-selects select {
+    width: 100%;
+  }
+
+  .toolbar-actions .button {
+    flex: 1;
+    justify-content: center;
+  }
+
+  table {
+    font-size: 12px;
+  }
+
+  thead th,
+  tbody td {
+    padding: 7px 8px;
+  }
+
+  .pagination {
+    gap: 6px;
+    font-size: 12px;
+  }
 }

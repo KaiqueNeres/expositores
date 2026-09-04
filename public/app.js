@@ -40,7 +40,49 @@
     statFiltered: document.getElementById('stat-filtered'),
     statPaises: document.getElementById('stat-paises'),
     statComProdutos: document.getElementById('stat-com-produtos'),
+    refreshBtn: document.getElementById('refresh-btn'),
+    refreshLabel: document.getElementById('refresh-label'),
+    refreshStatus: document.getElementById('refresh-status'),
+    lastUpdated: document.getElementById('last-updated'),
+    statusDot: document.getElementById('status-dot'),
+    themeToggle: document.getElementById('theme-toggle'),
   };
+
+  // ---- Tema claro/escuro ----------------------------------------------------
+  const THEME_KEY = 'theme';
+
+  function getPreferredTheme() {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'light' || saved === 'dark') return saved;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    el.themeToggle.textContent = theme === 'light' ? '🌙' : '☀️';
+    el.themeToggle.title = theme === 'light' ? 'Mudar para tema escuro' : 'Mudar para tema claro';
+  }
+
+  function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    const next = current === 'light' ? 'dark' : 'light';
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch {
+      // localStorage indisponível (ex.: modo privado) — o tema só não persiste entre visitas
+    }
+    applyTheme(next);
+  }
+
+  // Envolvido em try/catch para não travar o resto da página (busca, tabela,
+  // etc.) caso o HTML carregado esteja de alguma forma desatualizado/diferente
+  // do que este script espera (ex.: cache do navegador com uma versão antiga).
+  try {
+    applyTheme(document.documentElement.getAttribute('data-theme') || getPreferredTheme());
+    el.themeToggle.addEventListener('click', toggleTheme);
+  } catch (err) {
+    console.error('Falha ao inicializar o tema (a página continua funcionando normalmente):', err);
+  }
 
   function escapeHtml(str) {
     if (str === null || str === undefined) return '';
@@ -171,6 +213,8 @@
   }
 
   function populateCountryFilter(exhibitors) {
+    const previous = el.countryFilter.value;
+    el.countryFilter.innerHTML = '<option value="">Todos os países</option>';
     const countries = Array.from(new Set(exhibitors.map((e) => e.country).filter(Boolean))).sort((a, b) =>
       a.localeCompare(b, 'pt-BR')
     );
@@ -180,6 +224,7 @@
       opt.textContent = c;
       el.countryFilter.appendChild(opt);
     }
+    if (countries.includes(previous)) el.countryFilter.value = previous;
     el.statPaises.textContent = countries.length;
   }
 
@@ -258,28 +303,154 @@
     downloadBlob(JSON.stringify(state.filtered, null, 2), 'expositores-filtrado.json', 'application/json;charset=utf-8');
   }
 
-  async function init() {
+  // ---- Consumo local + botão "Atualizar dados" -----------------------------
+  // A página sempre lê os arquivos já salvos em data/. A coleta só roda quando
+  // o usuário clica em "Atualizar dados" (ou quando o servidor detecta que
+  // ainda não existe nenhum dado local) e só substitui o que já existe se
+  // terminar com sucesso — enquanto isso, a tela continua mostrando os dados
+  // antigos normalmente.
+  let pollTimer = null;
+  // Fica true quando não existe a API de coleta atrás da página (hospedagem
+  // estática): aí não há o que o botão "Atualizar dados" possa chamar.
+  let staticMode = false;
+
+  function formatDateTime(iso) {
+    if (!iso) return '—';
     try {
-      const res = await fetch('/data/exhibitors.json');
-      if (!res.ok) throw new Error('Não foi possível carregar data/exhibitors.json');
-      const data = await res.json();
-      state.all = data;
-      el.statTotal.textContent = data.length.toLocaleString('pt-BR');
-      el.statComProdutos.textContent = data.filter((e) => e.products && e.products.length > 0).length.toLocaleString('pt-BR');
-      populateCountryFilter(data);
-      applyFilters();
-    } catch (err) {
-      el.tbody.innerHTML = `<tr><td colspan="9" class="no-data">Erro ao carregar dados: ${escapeHtml(
-        err.message
-      )}. Rode "npm run collect" primeiro.</td></tr>`;
+      return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    } catch {
+      return '—';
     }
   }
 
-  el.search.addEventListener('input', applyFilters);
-  el.countryFilter.addEventListener('change', applyFilters);
-  el.activityFilter.addEventListener('change', applyFilters);
-  document.getElementById('download-json').addEventListener('click', downloadFilteredJson);
-  document.getElementById('download-csv').addEventListener('click', downloadFilteredCsv);
+  function setRefreshingUI(isRefreshing) {
+    el.refreshBtn.disabled = isRefreshing;
+    el.refreshBtn.classList.toggle('is-loading', isRefreshing);
+    el.refreshLabel.textContent = isRefreshing ? 'Atualizando...' : 'Atualizar dados';
+  }
+
+  function renderStatus(status) {
+    el.lastUpdated.textContent = `Última atualização: ${formatDateTime(status.lastUpdated)}`;
+    setRefreshingUI(status.refreshing);
+
+    el.statusDot.classList.remove('is-refreshing', 'is-error');
+    if (status.refreshing) {
+      el.statusDot.classList.add('is-refreshing');
+    } else if (status.lastError) {
+      el.statusDot.classList.add('is-error');
+    }
+
+    if (status.refreshing) {
+      const p = status.progress;
+      el.refreshStatus.textContent = p
+        ? `Coletando ${p.phase}${p.total ? `: ${p.collected.toLocaleString('pt-BR')}/${p.total.toLocaleString('pt-BR')}` : '...'}`
+        : 'Atualizando...';
+    } else if (status.lastError) {
+      el.refreshStatus.textContent = `Falha na última atualização: ${status.lastError}`;
+    } else {
+      el.refreshStatus.textContent = '';
+    }
+  }
+
+  // URLs relativas de propósito: a página funciona igual servida pelo Node
+  // (raiz do site) ou por uma hospedagem estática apontando para public/,
+  // inclusive quando ela fica dentro de um subcaminho (ex.: /expositores/).
+  async function fetchStatus() {
+    const res = await fetch('api/status', { cache: 'no-store' });
+    if (!res.ok) throw new Error('status indisponível');
+    return res.json();
+  }
+
+  async function reloadData() {
+    const res = await fetch('data/exhibitors.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error('Não foi possível carregar data/exhibitors.json');
+    if (staticMode) {
+      const modified = res.headers.get('Last-Modified');
+      el.lastUpdated.textContent = `Última atualização: ${modified ? formatDateTime(modified) : '—'}`;
+    }
+    const data = await res.json();
+    state.all = data;
+    el.statTotal.textContent = data.length.toLocaleString('pt-BR');
+    el.statComProdutos.textContent = data
+      .filter((e) => e.products && e.products.length > 0)
+      .length.toLocaleString('pt-BR');
+    populateCountryFilter(data);
+    applyFilters();
+  }
+
+  function pollStatus() {
+    if (pollTimer) return;
+    pollTimer = setInterval(async () => {
+      try {
+        const status = await fetchStatus();
+        renderStatus(status);
+        if (!status.refreshing) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+          if (!status.lastError) {
+            try {
+              await reloadData();
+            } catch {
+              // mantém os dados que já estavam na tela
+            }
+          }
+        }
+      } catch {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    }, 1500);
+  }
+
+  async function startRefresh() {
+    try {
+      setRefreshingUI(true);
+      el.refreshStatus.textContent = 'Iniciando atualização...';
+      const res = await fetch('/api/refresh', { method: 'POST' });
+      if (!res.ok && res.status !== 409) throw new Error('Falha ao iniciar atualização');
+      pollStatus();
+    } catch (err) {
+      setRefreshingUI(false);
+      el.refreshStatus.textContent = `Erro: ${err.message}`;
+    }
+  }
+
+  async function init() {
+    try {
+      const status = await fetchStatus();
+      renderStatus(status);
+      if (status.refreshing) pollStatus();
+    } catch {
+      // ambiente sem a API de status (ex.: hospedagem estática) — segue só com os dados locais
+      staticMode = true;
+      el.refreshBtn.hidden = true;
+      el.refreshStatus.textContent = '';
+    }
+
+    try {
+      await reloadData();
+    } catch (err) {
+      el.tbody.innerHTML = `<tr><td colspan="9" class="no-data">Nenhum dado local ainda. Clique em "Atualizar dados" para coletar. (${escapeHtml(
+        err.message
+      )})</td></tr>`;
+    }
+  }
+
+  // Também protegido: se algum botão/campo não existir por algum motivo (ex.:
+  // mistura de cache antigo de HTML com este JS novo), a página ainda carrega
+  // os dados em vez de morrer silenciosamente antes de chegar no init().
+  try {
+    el.search.addEventListener('input', applyFilters);
+    el.countryFilter.addEventListener('change', applyFilters);
+    el.activityFilter.addEventListener('change', applyFilters);
+    el.refreshBtn.addEventListener('click', startRefresh);
+    // O botão de JSON hoje está desativado no HTML, então cada um é registrado
+    // separadamente: a ausência de um não pode impedir o outro de funcionar.
+    document.getElementById('download-json')?.addEventListener('click', downloadFilteredJson);
+    document.getElementById('download-csv')?.addEventListener('click', downloadFilteredCsv);
+  } catch (err) {
+    console.error('Falha ao registrar algum controle da tela (verifique se o cache do navegador está desatualizado):', err);
+  }
 
   init();
 })();

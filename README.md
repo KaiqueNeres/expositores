@@ -46,7 +46,36 @@ npm install
 
 ## Uso
 
-### 1. Coletar todos os expositores
+### 1. Iniciar a página
+
+```bash
+npm start
+```
+
+Abra http://localhost:3020. A página **sempre consome os dados salvos em `data/`** — ela não
+sai coletando de novo a cada vez que você abre. Na primeira execução, se ainda não existir
+nenhum dado local, o servidor dispara a coleta completa automaticamente em segundo plano (a
+página já mostra isso e acompanha o progresso).
+
+Tem um botão **"🔄 Atualizar dados"** no topo da página: ele chama a API do servidor
+(`POST /api/refresh`), que roda a coleta completa em segundo plano e mostra o progresso em
+tempo real ("Coletando expositores: 2.450/7.046..."). A tela continua funcionando normalmente
+com os dados antigos enquanto isso — os arquivos em `data/` só são **substituídos se a coleta
+terminar com sucesso** (a escrita é atômica: grava em um arquivo temporário e só troca no final,
+então ninguém nunca vê um JSON pela metade). Se a coleta falhar, os dados antigos continuam
+intactos e a página mostra a mensagem de erro.
+
+Só é possível ter uma atualização em andamento por vez — clicar de novo (ou uma segunda aba)
+apenas acompanha a que já está rodando.
+
+`npm run dev` faz a mesma coisa, mas com **nodemon**: reinicia o servidor automaticamente quando
+`server.js`, algo em `src/` ou em `public/` é alterado. `npm run serve` é o equivalente sem
+auto-reload.
+
+### 2. Coletar manualmente pelo terminal (opcional)
+
+Além do botão na página, também é possível gerar/atualizar os arquivos direto pelo terminal,
+sem precisar do servidor rodando:
 
 ```bash
 npm run collect
@@ -66,7 +95,7 @@ O terminal mostra o progresso, imprime um exemplo do registro bruto recebido da 
 expositor quanto de produto, na primeira ocorrência de cada) para inspeção, e ao final confirma se
 a coleta ficou 100% completa (comparando com o total informado pela própria API).
 
-### 2. Coletar apenas expositores de um filtro específico
+### 3. Coletar apenas expositores de um filtro específico
 
 A página do site guarda o estado dos filtros (categoria, certificação, etc.) na própria URL.
 Basta aplicar o filtro desejado no site, copiar a URL da barra de endereço e passar como
@@ -82,23 +111,73 @@ correspondentes.
 > Tipos de filtro suportados: categoria (menu hierárquico) e listas de refinamento (checkboxes,
 > ex.: certificações). Filtros de intervalo (sliders numéricos) ainda não são convertidos
 > automaticamente — o script avisa no terminal caso encontre um.
+>
+> Esse filtro só vale para a coleta manual pelo terminal — o botão "Atualizar dados" na página
+> sempre coleta tudo.
 
-### 3. Visualizar os dados coletados
+### 4. Navegando pelos dados na página
 
-```bash
-npm run dev
-```
-
-Abra http://localhost:3000 no navegador. A página permite buscar por nome/cidade/stand, filtrar
-por país e por Activity Field ("Todos" ou "Alimentos e Produtos" — agrupa as 16 categorias que são
-efetivamente produtos alimentícios, excluindo Business Hub, Equipment/Technologies/Services,
-Organizations/federations/institutions, Services and trade press e Wines & spirits).
+A página permite buscar por nome/cidade/stand, filtrar por país e por Activity Field ("Todos" ou
+"Alimentos e Produtos" — agrupa as 16 categorias que são efetivamente produtos alimentícios,
+excluindo Business Hub, Equipment/Technologies/Services, Organizations/federations/institutions,
+Services and trade press e Wines & spirits).
 
 Os botões "Baixar JSON" / "Baixar CSV (Excel)" exportam **apenas os resultados filtrados na tela**
 (respeitando busca, país e Activity Field selecionados) — não o arquivo completo.
 
-`npm run dev` usa o **nodemon**, reiniciando o servidor automaticamente sempre que um arquivo em
-`server.js` ou `public/` for alterado. Para rodar sem auto-reload, use `npm run serve`.
+## Publicando no IIS (ou outra hospedagem estática)
+
+A página usa caminhos relativos, então basta apontar o site para a pasta `public/`. Os arquivos
+`index.html`, `app.js` e `styles.css` já ficam lá; falta apenas garantir os **dados**, porque uma
+hospedagem estática só enxerga o que está dentro da raiz do site. Duas opções:
+
+```bash
+npm run sync:data
+```
+
+copia `data/` para `public/data/` (rode de novo depois de cada `npm run collect`). Alternativa sem
+cópia: criar no IIS um **diretório virtual chamado `data`** dentro do site, apontando para a pasta
+`data/` do projeto — assim os dados novos aparecem sozinhos.
+
+O `public/web.config` já vem com o necessário: `index.html` como documento padrão e os MIME types
+de `.json`/`.csv`/`.js` (sem isso, o IIS devolve 404.3 no `exhibitors.json`).
+
+Nesse modo o site é **somente leitura**: não existe o servidor Node por trás, então a API de coleta
+(`/api/status`, `/api/refresh`) não responde e a página esconde automaticamente o botão
+"Atualizar dados", mostrando a data do arquivo publicado. Para atualizar, rode `npm run collect`
+seguido de `npm run sync:data`.
+
+### Deixando o botão "Atualizar dados" funcionar no IIS
+
+O botão precisa do `server.js` rodando **na mesma máquina do IIS**, com o IIS encaminhando `/api/`
+para ele. O `public/web.config` já traz a regra de proxy pronta, mas ela só funciona com dois
+módulos instalados no servidor:
+
+1. **URL Rewrite** — https://www.iis.net/downloads/microsoft/url-rewrite
+2. **Application Request Routing (ARR)** — https://www.iis.net/downloads/microsoft/application-request-routing
+
+Depois de instalar o ARR, é preciso **ligar o proxy** (ele vem desligado): no IIS Manager, clique no
+nó do servidor → *Application Request Routing Cache* → *Server Proxy Settings* → marque
+**Enable proxy** → *Apply*. Pelo terminal, o equivalente é:
+
+```powershell
+C:\Windows\System32\inetsrv\appcmd.exe set config -section:system.webServer/proxy /enabled:true /commit:apphost
+```
+
+O `server.js` precisa ficar no ar continuamente na porta 3020 (a mesma da regra do `web.config`).
+Rodar `npm start` num terminal só vale para teste: para valer, registre como serviço do Windows
+(ex.: [NSSM](https://nssm.cc/) ou `pm2`), senão a API cai quando a sessão fecha.
+
+O site do IIS deve apontar para a pasta `public/` **do próprio projeto** na máquina onde o Node
+roda. Assim, quando a coleta termina, o `public/data/` é atualizado automaticamente junto com o
+`data/` e o IIS já serve os dados novos, sem cópia manual.
+
+#### Erro 405 (Method Not Allowed) no `/api/refresh`
+
+Vale checar o **corpo da resposta** antes de mexer no IIS: se vier `Método não permitido`, o 405 é
+do Node, não do IIS — o proxy funcionou, mas entregou uma rota que o `server.js` não conhece
+(típico de usar `{R:1}` na regra em vez de `{R:0}`, o que remove o prefixo `api/`). Uma página de
+erro HTML do IIS, por outro lado, indica que a regra de rewrite não chegou a rodar.
 
 ## Estrutura do projeto
 
@@ -110,9 +189,11 @@ src/
   mapExhibitor.js       Converte um registro bruto de expositor no formato final
   mapProduct.js         Converte um registro bruto de produto no formato final
   collectExhibitors.js  Orquestra a coleta completa (expositores + produtos + validação)
-server.js               Servidor HTTP estático (serve /public e /data)
-public/                 Página HTML de visualização dos dados
-data/                   Saída da coleta (gerada por "npm run collect")
+  syncPublicData.js     Copia data/ para public/data/ (publicação estática, ex.: IIS)
+server.js               Servidor HTTP: serve public/ na raiz e data/ em /data, e expõe a API
+                        de atualização (GET /api/status, POST /api/refresh)
+public/                 Página HTML de visualização dos dados (raiz do site)
+data/                   Saída da coleta (gerada automaticamente; não vai para o git)
 ```
 
 ## Campos coletados

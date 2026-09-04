@@ -4,34 +4,64 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Expositores SIAL Paris 2026</title>
-<link rel="stylesheet" href="/public/styles.css" />
+<script>
+  // Define o tema antes da página renderizar, pra não dar aquele "flash" com o
+  // tema errado por uma fração de segundo.
+  (function () {
+    try {
+      var saved = localStorage.getItem('theme');
+      var theme = saved || ((window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark');
+      document.documentElement.setAttribute('data-theme', theme);
+    } catch (e) {}
+  })();
+</script>
+<link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
 <header>
-  <div>
+  <div class="header-title">
     <h1>Expositores — SIAL Paris 2026</h1>
     <div class="subtitle">Dados públicos coletados via API oficial do site (sialparis.com)</div>
   </div>
-  <div class="stats">
-    <div class="stat-box"><div class="value" id="stat-total">–</div><div class="label">Total</div></div>
-    <div class="stat-box"><div class="value" id="stat-filtered">–</div><div class="label">Filtrados</div></div>
-    <div class="stat-box"><div class="value" id="stat-paises">–</div><div class="label">Países</div></div>
-    <div class="stat-box"><div class="value" id="stat-com-produtos">–</div><div class="label">Com produtos</div></div>
+  <div class="header-right">
+    <div class="stats">
+      <div class="stat-box"><div class="value" id="stat-total">–</div><div class="label">Total</div></div>
+      <div class="stat-box"><div class="value" id="stat-filtered">–</div><div class="label">Filtrados</div></div>
+      <div class="stat-box"><div class="value" id="stat-paises">–</div><div class="label">Países</div></div>
+      <div class="stat-box"><div class="value" id="stat-com-produtos">–</div><div class="label">Com produtos</div></div>
+    </div>
+    <button class="icon-button" id="theme-toggle" type="button" title="Alternar tema claro/escuro" aria-label="Alternar tema claro/escuro">🌙</button>
   </div>
 </header>
 
+<div class="data-bar">
+  <div class="data-bar-info">
+    <span class="status-dot" id="status-dot"></span>
+    <span id="last-updated" class="last-updated">Última atualização: —</span>
+    <span id="refresh-status" class="refresh-status"></span>
+  </div>
+  <button class="button button-outline" id="refresh-btn" type="button">
+    <span class="refresh-icon" aria-hidden="true">↻</span>
+    <span id="refresh-label">Atualizar dados</span>
+  </button>
+</div>
+
 <div class="toolbar">
   <input type="text" id="search" placeholder="Buscar por nome, cidade, stand..." />
-  <select id="country-filter">
-    <option value="">Todos os países</option>
-  </select>
-  <select id="activity-filter">
-    <option value="">Todos</option>
-    <option value="food" selected>Alimentos e Produtos</option>
-  </select>
-  <button class="button" id="download-json" type="button" title="Exporta apenas os resultados filtrados na tela">Baixar JSON</button>
-  <button class="button" id="download-csv" type="button" title="Exporta apenas os resultados filtrados na tela">Baixar CSV (Excel)</button>
+  <div class="toolbar-selects">
+    <select id="country-filter">
+      <option value="">Todos os países</option>
+    </select>
+    <select id="activity-filter">
+      <option value="">Todos</option>
+      <option value="food" selected>Alimentos e Produtos</option>
+    </select>
+  </div>
+  <div class="toolbar-actions">
+    <!-- <button class="button" id="download-json" type="button" title="Exporta apenas os resultados filtrados na tela">Baixar JSON</button> -->
+    <button class="button" id="download-csv" type="button" title="Exporta apenas os resultados filtrados na tela">Baixar CSV (Excel)</button>
+  </div>
 </div>
 
 <main>
@@ -58,6 +88,6 @@
   <div class="pagination" id="pagination"></div>
 </main>
 
-<script src="/public/app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
